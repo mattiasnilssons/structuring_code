@@ -65,6 +65,8 @@ We have excluded specific outliers from the raw data. These outliers are corrupt
 appears in the energy column as big data spikes due to SIM-card issues, modem changes and grid
 outages. Specifically, all outliers that are resulting in a spike above 1 kWh are corrected. 
 
+![Data spike](/images/546375_spike.png)
+
 ## 2 Processing code
 
 ### 2.1 Code Language
@@ -89,12 +91,14 @@ The processed dataframe is excluding cooking events duplicates. We are, furtherm
 that the backfilling functionality to reduce data gaps will become significantly better until the final
 data release at the end of the pilot.
 
+![Event duplicate](/images/546280_March.png)
+
 ### Attachments - Cooking event algorithm
 As mentioned before, Python with Pandas was used for data processing. Below is a description of
 the steps that were taken to define the cooking events:
 1) Defining new parameters:
 <ul>
-  <li>power = current*voltage</li>
+  <li>power = current * voltage</li>
   <li>min_active_load = 15%</li>
   <li>power_capacity = 1 kW</li>
   <li>time_resolution = 5 minutes</li>
@@ -109,7 +113,7 @@ load is applied. Conditions when load_on is TRUE:
   <li> <code>meter_number = meter_number.shift()</code> </li>
 </ol>
 
-3) Discard cooking events that are both short and consume little energy, i.e. when all these
+3) Discard cooking events that are both short and consume little energy, i.e. when ALL these
 conditions are TRUE:
 <ul>
   <li> <code>cooking_event != cooking_event.shift()</code> </li>
@@ -119,3 +123,4 @@ conditions are TRUE:
 
 4) A summary of the start and end conditions of the cooking events are found in the illustration
 below.
+![Event algorithm](/images/cooking_event_picture_structure.png)
