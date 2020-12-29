@@ -12,7 +12,7 @@ import numpy as np
 
 def remove_spikes(df_raw, min_size_of_spikes=1):
     # (1) Why range(100)?: There are more than 50 recordings in some of the spikes.
-    # (2) Why not drop rows?: To save the dates of when the spikes occured.
+    # (2) Why not drop rows?: To save the dates of when the spikes occurs.
     # (3) Why min_size_of_spikes? = To avoid losing small energy movements, incl. timestamp issue.
     for _ in range(100):
         df_raw.loc[(df_raw.energy > df_raw.energy.shift(-1) + min_size_of_spikes) &
@@ -33,13 +33,15 @@ def cooking_event(
     df_processed.timestamp = np.int64(df_processed.timestamp)
     df_processed.timestamp = pd.to_datetime(df_processed.timestamp)
 
-    # add +3 hr to timestamp
+    # adding +3 hr to timestamp
     df_processed.timestamp = df_processed.timestamp + pd.Timedelta(hours=3)
     df_processed.timezone = 'UTC+03:00'
 
-    energy_threshold = min_active_load * power_capacity * time_resolution / 60
+    # creating indicators of when the EPC is considered to be online.
+    power_threshold = min_active_load * power_capacity
+    energy_threshold = power_threshold * time_resolution / 60
 
-    # (a): column of when a load is applied
+    # (a): column of when a load is applied.
     df_processed.loc[(
         (
             (df_processed.energy.diff() > energy_threshold)
@@ -63,84 +65,101 @@ def cooking_event(
     df_processed['timestamp_load'] = df_processed.load_count.map(
         load_instance.set_index('load_count')['timestamp'].to_dict())
 
+    ##############################
     # (e): defining cooking events
 
+    # (i): creating a distinct list from the column meter_number and selecting the data as a sub-dataframe from df_processed for each meter_number to conduct the further analysis
     df_processed.loc[(df_processed.meter_number.diff(-1) == 0),
-                     'next_timestamp'] = df_processed.timestamp.shift(-1) - df_processed.timestamp
+                     'diff_next_timestamp'] = df_processed.timestamp.shift(-1) - df_processed.timestamp
 
+    df_processed.loc[(df_processed.meter_number.diff(-1) == 0),
+                     'diff_prev_timestamp'] = df_processed.timestamp.diff()
+
+    # (ii): Cooking_start = TRUE: if timestamp_load - current timestamp is more than t_between and above energy_threshold OR new meter_number
     df_processed.loc[
-        (((df_processed.timestamp -
-           df_processed.timestamp_load.shift() > pd.to_timedelta(
-               t_between,
-               unit='m')) & (
-            df_processed.energy.diff() >= energy_threshold)) | (
-            df_processed.meter_number != df_processed.meter_number.shift())),
-        'cooking_start'] = True
+        (
+            (
+                (df_processed.timestamp -
+                 df_processed.timestamp_load.shift() > pd.to_timedelta(
+                     t_between,
+                     unit='m'))
+                & (df_processed.energy.diff() >= energy_threshold))
+            | (
+                df_processed.meter_number != df_processed.meter_number.shift())
+        ), 'cooking_start'] = True
 
+    # (iii): Cooking_start = FALSE: if energy increase is above energy threshold and diff_prev_timestamp is less than t_between
     df_processed.loc[
         (
             (df_processed.energy.diff() >= energy_threshold)
-            & (df_processed.timestamp.diff() < pd.to_timedelta(t_between, unit='m'))
+            & (df_processed.diff_prev_timestamp < pd.to_timedelta(t_between, unit='m'))
         ), 'cooking_start'] = False
 
+    # (iv): Cooking_start = TRUE: if timestamp_load row difference is above t_between + time_resolution AND power level is above 'power threshold', i.e. min_active_load * power_capacity
     df_processed.loc[
         (
-            (df_processed.timestamp_load.diff() > pd.to_timedelta(t_between + time_resolution, unit='m')) 
-            & (df_processed.power >= min_active_load * power_capacity)
-            ), 'cooking_start'] = True
+            (df_processed.timestamp_load.diff() > pd.to_timedelta(t_between + time_resolution, unit='m'))
+            & (df_processed.power >= power_threshold)
+        ), 'cooking_start'] = True
 
+    # (v): Cooking_end = TRUE: if cooking_start in next row is TRUE OR new meter_number
     df_processed.loc[
         (
             (df_processed.cooking_start.shift(-1))
             | (df_processed.meter_number != df_processed.meter_number.shift(-1))
         ), 'cooking_end'] = True
 
+    # (vi): Cooking_end = TRUE: if cooking_end in next row is TRUE AND diff_next_timestamp is above t_between
     df_processed.loc[
         (
             (df_processed.cooking_end.shift(-1))
-            & (df_processed.next_timestamp > pd.to_timedelta(t_between, unit='m'))
+            & (df_processed.diff_next_timestamp > pd.to_timedelta(t_between, unit='m'))
         ), 'cooking_end'] = True
 
+    # (vii): Cooking_start = TRUE: if cooking_end on prev row AND cooking_end on current row
     df_processed.loc[
         (
             (df_processed.cooking_end.shift())
             & (df_processed.cooking_end)
         ), 'cooking_start'] = True
 
+    # (viii): Cooking_start = FALSE: if cooking_start on prev row AND cooking_start = TRUE in current row AND diff_prev_timestamp is less than t_between AND diff_next_timestamp is more than t_between.
     df_processed.loc[
-        ((df_processed.cooking_start.shift()) & (
-            df_processed.cooking_start) & (
-            df_processed.timestamp.diff() <= pd.to_timedelta(
-                t_between,
-                unit='m')) & (
-                    df_processed.next_timestamp > pd.to_timedelta(
-                        t_between,
-                        unit='m'))),
-        'cooking_start'] = False
+        (
+            (df_processed.cooking_start.shift())
+            & (df_processed.cooking_start)
+            & (df_processed.diff_prev_timestamp <= pd.to_timedelta(
+                t_between, unit='m'))
+            & (df_processed.diff_next_timestamp > pd.to_timedelta(
+                t_between, unit='m'))
+        ), 'cooking_start'] = False
 
+    # (ix): Cooking_end = FALSE: if cooking_end on prev row AND cooking_end in current row == TRUE AND diff_prev_timestamp is more than t_between AND diff_next_timestamp is less than t_between.
     df_processed.loc[
         (
             (df_processed.cooking_end.shift())
             & (df_processed.cooking_end)
-            & (df_processed.timestamp.diff() > pd.to_timedelta(t_between, unit='m'))
-            & (df_processed.next_timestamp <= pd.to_timedelta(t_between, unit='m'))
+            & (df_processed.diff_prev_timestamp > pd.to_timedelta(t_between, unit='m'))
+            & (df_processed.diff_next_timestamp <= pd.to_timedelta(t_between, unit='m'))
         ), 'cooking_end'] = False
 
+    # (x): Cooking_start = FALSE: if cooking_start in prev row = TRUE AND cooking_start in current row = TRUE AND diff_prev_timestamp is less than t_between AND prev row has power above threshold.
     df_processed.loc[
-        ((df_processed.cooking_start.shift()) & (
-            df_processed.cooking_start) & (
-            df_processed.timestamp.diff() < pd.to_timedelta(
-                t_between,
-                unit='m')) & (
-                    df_processed.power.shift() >= min_active_load *
-                    power_capacity)),
-        'cooking_start'] = False
+        (
+            (df_processed.cooking_start.shift())
+            & (df_processed.cooking_start)
+            & (df_processed.diff_prev_timestamp < pd.to_timedelta(
+                t_between, unit='m'))
+            & (df_processed.power.shift() >= power_threshold)
+        ), 'cooking_start'] = False
 
+    # (xi): if new meter number Cooking_start = TRUE and Cooking_end = FALSE
     df_processed.loc[
         (df_processed.meter_number.diff() != 0), 'cooking_start'] = True
     df_processed.loc[
         (df_processed.meter_number.diff() != 0), 'cooking_end'] = False
 
+    ##############################################
     # (f): accumulated numbering of cooking events
     df_processed['cooking_event'] = 0
     df_processed.cooking_event += df_processed['cooking_start']
@@ -157,13 +176,13 @@ def cooking_event(
     df_processed['time_end'] = df_processed.cooking_event.map(
         end_cooking.set_index('cooking_event')['timestamp'].to_dict())
 
-    # (h): get duration of cooking event and sequence time during cooking event
+    # (h): getting duration of cooking event and sequence time during cooking event
     df_processed['cooking_time'] = (
         df_processed.time_end - df_processed.time_start) / np.timedelta64(1, 'm')
     df_processed['seq_time'] = (
         df_processed.timestamp - df_processed.time_start) / np.timedelta64(1, 'm')
 
-    # (i): disqualify too short cooking events
+    # (i): disqualifying too short cooking events
     df_processed.loc[((df_processed.cooking_event != df_processed.cooking_event.shift())
                       & (df_processed.cooking_event != df_processed.cooking_event.shift(-1))
                       & (df_processed.energy.diff() < min_cooking_event)), 'cooking_event'] = np.nan
@@ -171,8 +190,9 @@ def cooking_event(
     return df_processed
 
 
-def timestamp_issue(df_processed, error_margin=0.01):
+def timestamp_issue(df_processed, error_margin=0.04):
     df_epc = df_processed.copy()
+    
     # checking start of events
     start_of_event = df_epc.copy()
     start_of_event = start_of_event.groupby(
@@ -186,6 +206,7 @@ def timestamp_issue(df_processed, error_margin=0.01):
 
     df_epc['timestamp_issue'] = df_epc.cooking_event.map(
         start_of_event.set_index('cooking_event')['timestamp_issue'].to_dict())
+    
     # checking end of events
     end_of_event = df_epc.copy()
     end_of_event = end_of_event.groupby(
