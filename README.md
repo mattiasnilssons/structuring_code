@@ -65,7 +65,7 @@ We have excluded specific outliers from the raw data. These outliers are corrupt
 appears in the energy column as big data spikes due to SIM-card issues, modem changes and grid
 outages. Specifically, all outliers that are resulting in a spike above 1 kWh are corrected. 
 
-![Data spike](/images/546375_spike.png)
+![Data spike](/images/546336_comb_spikes.png)
 
 ## 2 Processing code
 
@@ -77,13 +77,13 @@ Python syntax.
 The cooking event is defined as a consistent recording sequence by monitoring the energy
 consumption and power level. Several conditions are put up to make the cooking event definitions as
 precise as possible (see attachments). The time between a recording of energy consumption and the
-end of a cooking session is set to just above 15 minutes, which is equal to 3 recordings at 5 minute
+end of a cooking session is set to 15 minutes, which is equal to 3 recordings at 5 minute
 recording frequency.
 
 ### 2.3 Handling Cooking Event Duplicates
 During the pilot, we have been developing a backfilling functionality. It allows us to send stored data
-to the server when a meter comes to an area with a good network. Unfortunately, some “baby
-diseases'' appeared at the beginning of using this feature. One such issue was that cooking events
+to the server when a meter comes to an area with a good network. Unfortunately, some "baby
+diseases" appeared at the beginning of using this feature. One such issue was that cooking events
 appeared twice, because smart meters sent data before they had been synchronized to the
 timezone settings of the server. Fortunately, this issue is now solved and, thus, only appears in the
 first half of the pilot.
