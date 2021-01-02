@@ -76,7 +76,7 @@ Python syntax.
 ### 2.2 Defining the Cooking Event
 The cooking event is defined as a consistent recording sequence by monitoring the energy
 consumption and power level. Several conditions are put up to make the cooking event definitions as
-precise as possible (see attachments). The time between a recording of energy consumption and the
+precise as possible (see deep dive). The time between a recording of energy consumption and the
 end of a cooking session is set to 15 minutes, which is equal to 3 recordings at 5 minute
 recording frequency.
 
@@ -91,9 +91,9 @@ The processed dataframe is excluding cooking events duplicates. We are, furtherm
 that the backfilling functionality to reduce data gaps will become significantly better until the final
 data release at the end of the pilot.
 
-![Event duplicate](/images/546280_March.png)
+![Event duplicate](/images/546281_timeissue.png)
 
-### Attachments - Cooking event algorithm
+### Deep dive - Cooking event algorithm
 As mentioned before, Python with Pandas was used for data processing. Below is a description of
 the steps that were taken to define the cooking events:
 1) Defining new parameters:
@@ -105,21 +105,22 @@ the steps that were taken to define the cooking events:
   <li>t_between = 15 minutes</li>
 </ul>
 
-2) A column called ‘load_on’ is created to indicate when the EPC is active, i.e. when a power
-load is applied. Conditions when load_on is TRUE:
+1) Create columns based on columns 'meter_number' and 'timestamp' by selecting the time difference between rows for each meter_number to conduct the further analysis:
+<ol type="a">
+  <li> <code>df_processed.loc[(df_processed.meter_number.diff() == 0),
+                     'diff_prev_timestamp'] = df_processed.timestamp.diff()</code> </li>
+  <li> <code>df_processed.loc[(df_processed.meter_number.diff(-1) == 0),
+                     'diff_next_timestamp'] = df_processed.timestamp.shift(-1) - df_processed.timestamp</code> </li>
+</ol>
+
+
+2) A column called ‘load’ is created to indicate when the EPC is active, i.e. when a power
+load is applied:
 <ol type="a">
   <li> <code>energy - energy.shift() > min_active_load * power_capacity * time_resolution / 60</code> </li>
   <li> <code>power > min_active_load * power_capacity</code> </li>
-  <li> <code>meter_number = meter_number.shift()</code> </li>
 </ol>
 
-3) Discard cooking events that are both short and consume little energy, i.e. when ALL these
-conditions are TRUE:
-<ul>
-  <li> <code>cooking_event != cooking_event.shift()</code> </li>
-  <li> <code>cooking_event != cooking_event.shift(-1)</code> </li>
-  <li> <code>energy - energy.shift() < 0.1</code> </li>
-</ul>
 
 4) A summary of the start and end conditions of the cooking events are found in the illustration
 below.
