@@ -93,7 +93,12 @@ data release at the end of the pilot.
 
 ![Event duplicate](/images/546281_timeissue.png)
 
-### Deep dive - Cooking event algorithm
+### 2.4 Adding Start & Ending of Cooking Events
+As the EPCs are turned off when they aren't used, the recordings do not include the time that the EPCs haven't sent their first signal in a cooking event. Similarily, when the cooking is finished the EPC might be turned off before it has sent the last recording. Hence, some of the energy consumption that clearly belongs to a specific cooking event might show up as a gap between events. This energy is added retrospectively by adding the time to each event before the first recording and after the last recording. This time is calculated based on the energy consumption difference and can be up to the time resolution interval, i.e. the smart meters has a 5 minute interval for this EPC project. The result is a more accurate consumption of cooking events and better estimates of the lost cooking events.
+
+
+
+### Deep Dive - Cooking Event Algorithm
 As mentioned before, Python with Pandas was used for data processing. Below is a description of
 the steps that were taken to define the cooking events:
 1) Defining new parameters:
@@ -105,7 +110,7 @@ the steps that were taken to define the cooking events:
   <li>t_between = 15 minutes</li>
 </ul>
 
-1) Create columns based on columns 'meter_number' and 'timestamp' by selecting the time difference between rows for each meter_number to conduct the further analysis:
+2) Create columns based on columns 'meter_number' and 'timestamp' by selecting the time difference between rows for each meter_number to conduct the further analysis:
 <ol type="a">
   <li> <code>df_processed.loc[(df_processed.meter_number.diff() == 0),
                      'diff_prev_timestamp'] = df_processed.timestamp.diff()</code> </li>
@@ -114,7 +119,7 @@ the steps that were taken to define the cooking events:
 </ol>
 
 
-2) A column called ‘load’ is created to indicate when the EPC is active, i.e. when a power
+3) A column called ‘load’ is created to indicate when the EPC is active, i.e. when a power
 load is applied:
 <ol type="a">
   <li> <code>energy - energy.shift() > min_active_load * power_capacity * time_resolution / 60</code> </li>
