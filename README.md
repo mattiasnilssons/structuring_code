@@ -96,7 +96,7 @@ data release at the end of the pilot.
 ### 2.4 Adding Start & Ending of Cooking Events
 As the EPCs are turned off when they aren't used, the recordings do not include the time that the EPCs haven't sent their first signal in a cooking event. Similarily, when the cooking is finished the EPC might be turned off before it has sent the last recording. Hence, some of the energy consumption that clearly belongs to a specific cooking event might show up as a gap between events. This energy is added retrospectively by adding the time to each event before the first recording and after the last recording. This time is calculated based on the energy consumption difference and can be up to the time resolution interval, i.e. the smart meters has a 5 minute interval for this EPC project. The result is a more accurate consumption of cooking events and better estimates of the lost cooking events.
 
-
+![Adding_start_end](/images/546281_improved_cookingevents.png)
 
 ### Deep Dive - Cooking Event Algorithm
 As mentioned before, Python with Pandas was used for data processing. Below is a description of
